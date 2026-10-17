@@ -1,0 +1,25 @@
+{
+  "name": "stitch-bhashawiki-pramaan-studio",
+  "version": "1.0.0",
+  "description": "BhashaWiki Pramaan Studio — Voice-first, multimodal field-to-Wiki verification and knowledge-graph engine for Indian regional languages",
+  "main": "index.html",
+  "type": "module",
+  "scripts": {
+    "start": "npx serve -l 3000 .",
+    "dev": "npx serve -l 3000 .",
+    "check": "node --check js/bundle.js js/app.js js/modules/speechRecognition.js js/modules/exifVerifier.js js/modules/geminiService.js js/modules/knowledgeGraph.js"
+  },
+  "keywords": [
+    "bhashawiki",
+    "wikipedia",
+    "indic-languages",
+    "devanagari",
+    "wikidata",
+    "knowledge-graph",
+    "exif",
+    "web-speech-api",
+    "gemini-3.8-flash"
+  ],
+  "author": "BhashaWiki Team",
+  "license": "MIT"
+}

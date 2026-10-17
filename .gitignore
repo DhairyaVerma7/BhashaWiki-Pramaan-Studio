@@ -1,0 +1,13 @@
+# Dependencies
+node_modules/
+
+# OS specific files
+Thumbs.db
+.DS_Store
+
+# Logs & temp files
+*.log
+npm-debug.log*
+
+# Old raw Stitch template (optional)
+code.html

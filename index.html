@@ -1,0 +1,1105 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <title>BhashaWiki Pramaan Studio — Multimodal Field-to-Wiki Verification Engine</title>
+  
+  <!-- Material Symbols & Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin=""/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Noto+Serif:ital,wght@0,400;0,600;1,400&family=Plus+Jakarta+Sans:wght@500;600;700&display=swap" rel="stylesheet"/>
+  
+  <!-- Exifr Library for Client-Side EXIF GPS & Camera Extraction -->
+  <script src="https://cdn.jsdelivr.net/npm/exifr/dist/full.umd.js"></script>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "canvas-base": "#F8F9FA",
+            "surface-card": "#FFFFFF",
+            "border-subtle": "#EAECF0",
+            "border-strong": "#D0D5DD",
+            "wiki-blue": "#0B66C3",
+            "wiki-blue-hover": "#084C93",
+            "wiki-blue-subtle": "#EFF6FF",
+            "text-primary": "#101828",
+            "text-secondary": "#475467",
+            "text-muted": "#667085",
+            "emerald-accent": "#059669",
+            "emerald-subtle": "#ECFDF5",
+            "saffron-accent": "#D97706",
+            "saffron-subtle": "#FFFBEB"
+          },
+          fontFamily: {
+            "sans": ["Inter", "system-ui", "sans-serif"],
+            "headline": ["Plus Jakarta Sans", "Inter", "sans-serif"],
+            "encyclopedic": ["Noto Serif", "Georgia", "serif"],
+            "mono": ["JetBrains Mono", "monospace"]
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    /* Smooth natural document scrollbar */
+    ::-webkit-scrollbar { width: 7px; height: 7px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.35); border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.6); }
+
+    /* Flash highlight animation for injected facts */
+    .injected-highlight {
+      animation: flash-highlight 1.6s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes flash-highlight {
+      0% { background-color: rgba(16, 185, 129, 0.25); border-radius: 4px; }
+      100% { background-color: transparent; }
+    }
+
+    #wikitext-editor:focus {
+      outline: none;
+    }
+  </style>
+</head>
+
+<body class="bg-canvas-base text-text-primary font-sans antialiased min-h-screen flex flex-col">
+  
+  <!-- Hidden File Input for Monument Photo EXIF Upload -->
+  <input type="file" id="photo-upload-input" accept="image/jpeg,image/png,image/webp,image/heic" class="hidden"/>
+
+  <!-- ============================================================== -->
+  <!-- 1. SLIM NOTION-STYLE STICKY HEADER (54px) -->
+  <!-- ============================================================== -->
+  <header class="sticky top-0 z-40 h-[54px] bg-white/95 backdrop-blur-md border-b border-border-subtle px-4 flex items-center justify-between gap-3 select-none">
+    
+    <!-- Left: Sidebar Toggle, Brand, Breadcrumb -->
+    <div class="flex items-center gap-3 shrink-0">
+      <button id="sidebar-toggle-btn" class="p-1.5 rounded-md hover:bg-slate-100 text-text-secondary transition-colors cursor-pointer" title="Toggle Corpus Sidebar (Cmd/Ctrl + B)">
+        <span class="material-symbols-outlined text-[20px]">dock_to_left</span>
+      </button>
+
+      <div class="flex items-center gap-2">
+        <div class="w-7 h-7 rounded bg-wiki-blue flex items-center justify-center text-white shadow-xs font-bold text-sm font-headline">
+          <span>भा</span>
+        </div>
+        <div class="flex items-baseline gap-1.5">
+          <span class="font-headline font-bold text-[15px] tracking-tight text-text-primary">BhashaWiki</span>
+          <span class="text-[11px] font-mono text-wiki-blue font-semibold uppercase tracking-wider">Pramaan Studio</span>
+        </div>
+      </div>
+
+      <div class="hidden md:flex items-center gap-1.5 pl-3 border-l border-border-subtle text-[12px] font-mono text-text-secondary" id="breadcrumb-wiki-article">
+        <span class="material-symbols-outlined text-[15px] text-wiki-blue">database</span>
+        <span id="breadcrumb-wiki-title" class="font-medium text-text-primary">hi.wikipedia.org/wiki/खुसरो_बाग़</span>
+        <span class="text-text-muted">/</span>
+        <span class="inline-flex items-center gap-1 text-emerald-700 bg-emerald-subtle px-1.5 py-0.5 rounded text-[11px] font-medium" id="breadcrumb-qid">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-accent"></span>
+          <span id="breadcrumb-qid-label">QID: Q6403185</span>
+        </span>
+      </div>
+    </div>
+
+    <!-- Center: Segmented Document View Switcher -->
+    <div class="hidden sm:flex items-center bg-slate-100/80 p-0.5 rounded-lg border border-border-subtle" id="view-mode-selector">
+      <button class="view-mode-btn px-3 py-1 rounded-md text-[12px] font-medium transition-all shadow-xs bg-white text-text-primary cursor-pointer" data-mode="split" id="view-mode-split">
+        <span class="inline-flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-[15px]">vertical_split</span>
+          <span>Split View</span>
+        </span>
+      </button>
+      <button class="view-mode-btn px-3 py-1 rounded-md text-[12px] font-medium transition-all text-text-secondary hover:text-text-primary cursor-pointer" data-mode="reader" id="view-mode-reader">
+        <span class="inline-flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-[15px]">menu_book</span>
+          <span>Reader View</span>
+        </span>
+      </button>
+      <button class="view-mode-btn px-3 py-1 rounded-md text-[12px] font-medium transition-all text-text-secondary hover:text-text-primary cursor-pointer" data-mode="editor" id="view-mode-editor">
+        <span class="inline-flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-[15px]">code</span>
+          <span>Wikitext Only</span>
+        </span>
+      </button>
+    </div>
+
+    <!-- Right: Telemetry Chips, Inspector Drawer Toggle, Export Button -->
+    <div class="flex items-center gap-2 shrink-0">
+      <!-- Latency & Grounding Chip -->
+      <div class="hidden lg:flex items-center gap-1 px-2 py-1 rounded bg-slate-50 text-text-secondary text-[11px] font-mono border border-border-subtle">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-accent"></span>
+        <span id="telemetry-latency">18ms</span>
+        <span class="text-text-muted">•</span>
+        <span class="text-emerald-700 font-medium">99.4% Match</span>
+      </div>
+
+      <!-- AI Status Badge (Click to open Gemini API Key Modal) -->
+      <button class="hidden md:flex items-center gap-1.5 px-2 py-1 rounded bg-emerald-subtle text-emerald-800 text-[11px] font-mono border border-emerald-200 hover:bg-emerald-100/60 transition-colors cursor-pointer" id="header-ai-badge" title="Configure Gemini API Settings">
+        <span class="relative flex h-2 w-2">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-accent"></span>
+        </span>
+        <span class="truncate max-w-[150px]" id="header-ai-label">Gemini 3.8 + EXIF</span>
+      </button>
+
+      <!-- Toggle Pramaan Inspector Drawer Button -->
+      <button class="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 hover:bg-slate-200/70 text-text-secondary text-[12px] font-medium transition-colors border border-border-subtle cursor-pointer" id="inspector-toggle-btn" title="Toggle Evidence & AI Verification Inspector">
+        <span class="material-symbols-outlined text-[17px] text-wiki-blue">tune</span>
+        <span class="hidden md:inline">Inspector</span>
+        <span class="w-4 h-4 rounded-full bg-wiki-blue text-white text-[10px] flex items-center justify-center font-mono">3</span>
+      </button>
+
+      <!-- Primary Action: Sandbox Push -->
+      <button class="bg-wiki-blue text-white px-3.5 py-1.5 rounded-md text-[12px] font-medium hover:bg-wiki-blue-hover transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer" id="top-publish-btn">
+        <span class="material-symbols-outlined text-[15px]">send</span>
+        <span>Publish Diff</span>
+      </button>
+
+      <button class="hidden" id="header-export-btn"></button>
+      <button class="hidden" id="header-export-menu-btn"></button>
+      <span class="hidden" id="header-qid-text">Wikidata (Q6403185)</span>
+      <div class="hidden" id="studio-nav">
+        <a class="nav-tab" data-target="col-field" href="#field"></a>
+        <a class="nav-tab" data-target="sec-fact-gap" href="#fact"></a>
+        <a class="nav-tab" data-target="col-editor" href="#editor"></a>
+        <a class="nav-tab" data-target="col-knowledge" href="#graph"></a>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============================================================== -->
+  <!-- 2. MAIN APP CONTAINER (COLLAPSIBLE SIDEBAR + DOCUMENT WORKSPACE) -->
+  <!-- ============================================================== -->
+  <div class="flex-1 flex overflow-hidden relative">
+
+    <!-- ============================================================ -->
+    <!-- COLLAPSIBLE LEFT SIDEBAR: CORPUS NAVIGATOR (240px) -->
+    <!-- ============================================================ -->
+    <aside class="w-60 bg-white border-r border-border-subtle flex flex-col justify-between shrink-0 transition-all duration-300 select-none z-30" id="corpus-sidebar">
+      <div class="p-3 space-y-4 overflow-y-auto">
+        <!-- Sidebar Header -->
+        <div class="flex items-center justify-between pb-1 text-[11px] font-mono uppercase tracking-wider text-text-muted font-semibold">
+          <span>Corpus Navigator</span>
+          <span class="text-wiki-blue font-bold">hi:Indic_Arch</span>
+        </div>
+
+        <!-- Monument Presets List -->
+        <div class="space-y-1 text-[13px]" id="corpus-monument-list">
+          <div class="corpus-item p-2 rounded-md bg-wiki-blue-subtle text-wiki-blue font-medium flex items-center justify-between cursor-pointer transition-colors" data-monument="khusro_bagh">
+            <div class="flex items-center gap-2 truncate">
+              <span class="material-symbols-outlined text-[17px]">location_on</span>
+              <span class="truncate">Khusro Bagh</span>
+            </div>
+            <span class="text-[11px] font-mono px-1.5 py-0.2 rounded bg-wiki-blue text-white">18</span>
+          </div>
+
+          <div class="corpus-item p-2 rounded-md text-text-secondary hover:bg-slate-50 hover:text-text-primary flex items-center justify-between cursor-pointer transition-colors" data-monument="allahabad_fort">
+            <div class="flex items-center gap-2 truncate">
+              <span class="material-symbols-outlined text-[17px]">fort</span>
+              <span class="truncate">Allahabad Fort</span>
+            </div>
+            <span class="text-[11px] font-mono text-text-muted">42</span>
+          </div>
+
+          <div class="corpus-item p-2 rounded-md text-text-secondary hover:bg-slate-50 hover:text-text-primary flex items-center justify-between cursor-pointer transition-colors" data-monument="anand_bhavan">
+            <div class="flex items-center gap-2 truncate">
+              <span class="material-symbols-outlined text-[17px]">museum</span>
+              <span class="truncate">Anand Bhavan</span>
+            </div>
+            <span class="text-[11px] font-mono text-text-muted">12</span>
+          </div>
+        </div>
+
+        <!-- Verification Pipeline Status -->
+        <div class="pt-2 border-t border-border-subtle">
+          <span class="text-[11px] font-mono uppercase tracking-wider text-text-muted font-semibold block mb-2">Pipeline Telemetry</span>
+          <div class="space-y-2 text-[12px] font-mono">
+            <div class="p-2 rounded bg-slate-50 border border-border-subtle">
+              <div class="flex justify-between items-center mb-1">
+                <span class="text-text-secondary">EXIF Trust</span>
+                <span class="text-emerald-700 font-semibold" id="sidebar-exif-percent">98.4%</span>
+              </div>
+              <div class="w-full h-1 bg-slate-200 rounded-full overflow-hidden">
+                <div class="bg-emerald-accent h-full transition-all duration-500" id="sidebar-exif-bar" style="width: 98.4%"></div>
+              </div>
+            </div>
+
+            <div class="p-2 rounded bg-slate-50 border border-border-subtle">
+              <div class="flex justify-between items-center mb-1">
+                <span class="text-text-secondary">ASR Audio</span>
+                <span class="text-wiki-blue font-semibold" id="sidebar-asr-percent">100% Valid</span>
+              </div>
+              <div class="w-full h-1 bg-slate-200 rounded-full overflow-hidden">
+                <div class="bg-wiki-blue h-full w-full"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Field Station HUD Info -->
+        <div class="p-2.5 rounded-lg bg-saffron-subtle border border-amber-200/70 text-[11px] font-mono space-y-1">
+          <div class="flex items-center justify-between text-saffron-accent font-semibold">
+            <span>FIELD STATION HUD</span>
+            <span class="text-[9px] bg-amber-200/80 px-1 rounded text-amber-900">RTK-FIX</span>
+          </div>
+          <div class="text-text-primary font-medium" id="sidebar-hud-gps">25.4448° N, 81.8213° E</div>
+          <div class="text-text-muted text-[10px]" id="sidebar-hud-precision">Precision: ±0.4m • WGS 84</div>
+        </div>
+      </div>
+
+      <!-- Sidebar Footer Collapse Toggle -->
+      <div class="p-2 border-t border-border-subtle flex items-center justify-between text-[11px] text-text-muted">
+        <span>BhashaWiki Engine v2.4</span>
+        <button id="sidebar-close-btn" class="p-1 rounded hover:bg-slate-100 text-text-secondary transition-colors" title="Hide Sidebar">
+          <span class="material-symbols-outlined text-[16px]">chevron_left</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- ============================================================ -->
+    <!-- 3. CENTRAL DOCUMENT WORKSPACE (NATURAL VERTICAL SCROLL) -->
+    <!-- ============================================================ -->
+    <main class="flex-1 overflow-y-auto bg-canvas-base flex flex-col min-w-0" id="document-scroll-container">
+      
+      <!-- Sticky Fact-Gap Diff Banner (Clean Notion-style Callout) -->
+      <div class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs border-b border-border-subtle px-4 py-2 flex flex-wrap items-center justify-between gap-2 shadow-2xs" id="sec-fact-gap">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-[17px] text-saffron-accent">compare_arrows</span>
+          <span class="text-[12px] font-semibold text-text-primary">Cross-Language Fact Diff:</span>
+          <span class="text-[11px] font-mono text-saffron-accent font-medium bg-saffron-subtle px-2 py-0.5 rounded border border-amber-200" id="fact-gap-count-badge">
+            ⚠️ 14 Verified Facts Missing in Hindi!
+          </span>
+          <span class="hidden xl:inline text-[11px] font-mono text-text-muted" id="fact-diff-ratio">en.wiki (18) ⟷ hi.wiki (4)</span>
+        </div>
+
+        <div class="flex items-center gap-1.5 overflow-x-auto" id="fact-pills-container">
+          <button class="fact-pill flex items-center gap-1 px-2 py-1 rounded bg-slate-50 hover:bg-slate-100 text-wiki-blue text-[11px] font-mono border border-border-subtle transition-all cursor-pointer" data-inject="court-artist">
+            <span class="material-symbols-outlined text-[13px]">add_circle</span>
+            <span>+ Aqa Reza (1622)</span>
+          </button>
+          <button class="fact-pill flex items-center gap-1 px-2 py-1 rounded bg-slate-50 hover:bg-slate-100 text-wiki-blue text-[11px] font-mono border border-border-subtle transition-all cursor-pointer" data-inject="sandstone-arcade">
+            <span class="material-symbols-outlined text-[13px]">add_circle</span>
+            <span>+ 3-Tier Sandstone Arcade</span>
+          </button>
+          <button class="fact-pill flex items-center gap-1 px-2 py-1 rounded bg-slate-50 hover:bg-slate-100 text-emerald-700 text-[11px] font-mono border border-border-subtle transition-all cursor-pointer" data-inject="sync-citations">
+            <span class="material-symbols-outlined text-[13px]">sync_alt</span>
+            <span>+ Sync 4 Citations</span>
+          </button>
+          <button class="px-2.5 py-1 rounded bg-wiki-blue text-white text-[11px] font-medium hover:bg-wiki-blue-hover transition-colors shadow-2xs cursor-pointer flex items-center gap-1" id="batch-inject-btn">
+            <span class="material-symbols-outlined text-[13px]">playlist_add_check</span>
+            <span>Inject All</span>
+          </button>
+          <button class="p-1 rounded text-text-muted hover:text-text-primary hover:bg-slate-100 transition-colors cursor-pointer" id="quick-diff-refresh" title="Re-diff Corpora">
+            <span class="material-symbols-outlined text-[15px]">sync</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Core Editing & Reading Arena (Split or Single Column) -->
+      <div class="p-4 md:p-6 max-w-7xl mx-auto w-full flex-1 flex flex-col gap-6">
+        
+        <!-- Dual-Pane Workspace Container -->
+        <div class="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6 min-h-[680px]" id="dual-pane-arena">
+          
+          <!-- PANE A: RAW WIKITEXT & QID EDITOR -->
+          <div class="bg-white rounded-xl border border-border-subtle shadow-xs flex flex-col overflow-hidden transition-all duration-200" id="col-editor">
+            <!-- Editor Minimal Toolbar -->
+            <div class="px-3 py-2 bg-slate-50/80 border-b border-border-subtle flex items-center justify-between text-text-secondary select-none">
+              <div class="flex items-center gap-1 text-[12px]">
+                <button class="w-6 h-6 rounded hover:bg-slate-200/80 font-bold flex items-center justify-center cursor-pointer transition-colors" id="btn-format-bold" title="Bold ('''text''')">B</button>
+                <button class="w-6 h-6 rounded hover:bg-slate-200/80 italic flex items-center justify-center cursor-pointer transition-colors" id="btn-format-italic" title="Italic (''text'')">I</button>
+                <button class="w-6 h-6 rounded hover:bg-slate-200/80 flex items-center justify-center cursor-pointer transition-colors" id="btn-format-link" title="WikiLink ([[Link]])">
+                  <span class="material-symbols-outlined text-[15px]">link</span>
+                </button>
+                <button class="w-6 h-6 rounded hover:bg-slate-200/80 flex items-center justify-center cursor-pointer transition-colors" id="btn-format-quote" title="Reference Citation (<ref>)">
+                  <span class="material-symbols-outlined text-[15px]">format_quote</span>
+                </button>
+                <span class="w-[1px] h-3.5 bg-slate-300 mx-1"></span>
+                <button class="px-1.5 py-0.5 rounded bg-white text-wiki-blue text-[11px] font-mono border border-border-subtle flex items-center gap-0.5 hover:bg-slate-50 transition-colors cursor-pointer" id="btn-format-qid" title="Insert Wikidata QID">
+                  <span class="material-symbols-outlined text-[12px]">dataset</span>
+                  <span>[d:Q]</span>
+                </button>
+                <button class="px-1.5 py-0.5 rounded bg-emerald-subtle text-emerald-800 text-[11px] font-mono border border-emerald-200 flex items-center gap-0.5 hover:bg-emerald-100 transition-colors cursor-pointer" id="btn-format-audio" title="Insert MediaWiki {{Audio}}">
+                  <span class="material-symbols-outlined text-[12px]">volume_up</span>
+                  <span>{{Audio}}</span>
+                </button>
+              </div>
+
+              <div class="flex items-center gap-2 font-mono text-[11px] text-text-muted">
+                <span>UTF-8 • Wikitext</span>
+                <button class="text-wiki-blue hover:underline cursor-pointer" id="editor-prettify">Prettify</button>
+              </div>
+            </div>
+
+            <!-- Code Editor Area with Line Numbers -->
+            <div class="flex-1 flex overflow-hidden font-mono text-[12px] bg-white">
+              <!-- Line Numbers -->
+              <div class="w-9 shrink-0 bg-slate-50/60 text-slate-400 text-right pr-2.5 pt-3 select-none font-mono text-[11px] leading-[24px] border-r border-border-subtle" id="editor-line-numbers">
+                1<br/>2<br/>3<br/>4<br/>5<br/>6<br/>7<br/>8<br/>9<br/>10<br/>11<br/>12<br/>13<br/>14<br/>15<br/>16
+              </div>
+              
+              <!-- Editable Wikitext Body -->
+              <div class="flex-1 p-3.5 overflow-y-auto whitespace-pre-wrap font-mono text-[12.5px] leading-[24px] text-text-primary focus:outline-none" contenteditable="true" id="wikitext-editor" spellcheck="false">
+<div class="text-slate-400">// BhashaWiki Indic Standard Wikitext Specification</div>
+<div><span class="text-amber-800 font-bold">== वास्तुकला एवं ऐतिहासिक पृष्ठभूमि ==</span></div>
+<div><span class="text-wiki-blue font-semibold">'''खुसरो बाग़'''</span> (<span class="text-slate-500">अंग्रेज़ी:</span> Khusro Bagh) <span class="bg-blue-50 text-wiki-blue px-1 rounded">[[प्रयागराज]]</span> के लूकरगंज क्षेत्र में स्थित एक विशाल एवं ऐतिहासिक <span class="bg-blue-50 text-wiki-blue px-1 rounded">[[मुग़ल वास्तुकला|मुग़ल-कालीन]]</span> चारबाग़ शैली का उद्यान परिसर है।&lt;ref name="asi_exif"&gt;{{cite web |title=ASI Monument Plaque |coord=25.4448,81.8213 |access-date=2024-11-14}}&lt;/ref&gt;</div>
+<div><span class="bg-emerald-50 text-emerald-700 font-semibold px-1 rounded">{{Audio|Hi-KhusroBagh.ogg|उच्चारण: खुसरो बाग़}}</span></div>
+<div class="my-1 text-slate-400">// Primary Grounded Archival Fact</div>
+<div>इस उद्यान का मुख्य निर्माण मुग़ल सम्राट <span class="bg-blue-50 text-wiki-blue px-1 rounded">[[जहाँगीर|जहाँगीर]]</span> के शासनकाल (1622 ईस्वी) में उनके दरबारी चित्रकार और मुख्य वास्तुविद <span class="bg-amber-100 text-amber-900 font-semibold px-1 rounded" id="markup-aqa">[[आक़ा रज़ा]]</span> <span class="text-[10px] text-wiki-blue font-mono bg-slate-100 px-1 rounded inline-block">[d:Q6403185]</span> द्वारा कराया गया था।</div>
+<div>&nbsp;</div>
+<div><span class="text-amber-800 font-bold">=== प्रमुख मक़बरे एवं संरचनाएँ ===</span></div>
+<div>यह परिसर मुख्य रूप से चार विशाल बलुआ पत्थर से निर्मित मक़बरों के लिए विख्यात है:</div>
+<div>* <span class="text-wiki-blue font-semibold">सुल्तान ख़ुसरो का मक़बरा:</span> त्रि-स्तरीय चारदीवारी युक्त।</div>
+<div>* <span class="text-wiki-blue font-semibold">शाह बेगम (मानबाई) का मक़बरा:</span> 1604 ईस्वी में निर्मित अष्टकोणीय छतरी।</div>
+<div>* <span class="text-wiki-blue font-semibold">निसार बेगम का मक़बरा:</span> नक्काशीदार फ़ारसी सुलेख से सुसज्जित।</div>
+<div>&nbsp;</div>
+<div>[[श्रेणी:उत्तर प्रदेश के मुग़ल स्मारक]] [[श्रेणी:प्रयागराज में पर्यटन]] [[श्रेणी:भारतीय पुरातत्व सर्वेक्षण द्वारा संरक्षित स्थल]]</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- PANE B: WIKIPEDIA VECTOR-2022 LIVE READER RENDER -->
+          <div class="bg-white rounded-xl border border-border-subtle shadow-xs flex flex-col overflow-hidden transition-all duration-200" id="wikipedia-preview-container">
+            <!-- Reader Header Chrome -->
+            <div class="px-4 py-2 bg-slate-50/80 border-b border-border-subtle flex items-center justify-between text-[12px] text-text-secondary select-none">
+              <div class="flex items-center gap-1.5 font-medium">
+                <span class="material-symbols-outlined text-[15px] text-wiki-blue">visibility</span>
+                <span>Wikipedia Vector-2022 Reader View</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="px-2 py-0.5 rounded bg-white text-[11px] font-mono text-text-muted border border-border-subtle shadow-2xs">hi.wikipedia.org</span>
+                <a href="https://hi.wikipedia.org/wiki/खुसरो_बाग़" target="_blank" class="text-text-muted hover:text-wiki-blue transition-colors" title="Open in Wikipedia">
+                  <span class="material-symbols-outlined text-[15px]">open_in_new</span>
+                </a>
+              </div>
+            </div>
+
+            <!-- Wikipedia Document Sheet -->
+            <div class="p-6 overflow-y-auto flex-1 font-encyclopedic leading-relaxed text-text-primary" id="wikipedia-preview">
+              <!-- Article Title -->
+              <div class="pb-3 mb-4 border-b border-border-subtle">
+                <h1 class="font-headline font-bold text-[28px] text-text-primary leading-tight" id="preview-article-title">खुसरो बाग़</h1>
+                <div class="text-[12px] font-sans text-text-muted mt-1">मुक्त ज्ञानकोश विकिपीडिया से • (सत्यापित मसौदा)</div>
+              </div>
+
+              <!-- Floated Wikipedia Infobox -->
+              <div class="float-right ml-5 mb-4 w-[250px] bg-slate-50 rounded-lg border border-border-subtle shadow-xs overflow-hidden font-sans text-[12px]" id="wiki-infobox">
+                <div class="bg-slate-100/80 px-3 py-2 text-center font-bold font-headline text-[13px] text-text-primary border-b border-border-subtle" id="infobox-title">
+                  खुसरो बाग़ <br/><span class="text-[11px] font-normal text-text-muted font-sans">Khusro Bagh</span>
+                </div>
+
+                <!-- Infobox Image -->
+                <div class="p-2">
+                  <div class="w-full h-28 bg-slate-200 rounded overflow-hidden relative flex items-center justify-center">
+                    <span class="material-symbols-outlined text-slate-400 text-[36px]">museum</span>
+                    <span class="absolute bottom-1 left-1 right-1 text-center bg-black/60 text-white text-[9px] rounded px-1 py-0.5 font-medium truncate">
+                      ASI संरक्षित स्मारक
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Interactive Architectural Floorplan SVG -->
+                <div class="p-2 bg-white border-t border-b border-border-subtle">
+                  <div class="text-[10px] font-mono uppercase text-text-muted mb-1 flex justify-between">
+                    <span>Floorplan Layout</span>
+                    <span class="text-wiki-blue">SVG v2.1</span>
+                  </div>
+                  <svg class="w-full h-auto bg-slate-50 rounded p-1 border border-border-subtle" style="max-height: 110px;" viewBox="0 0 200 130" id="floorplan-svg">
+                    <rect fill="none" height="120" stroke="#94A3B8" stroke-dasharray="3 2" stroke-width="1.5" width="190" x="5" y="5"></rect>
+                    <line stroke="#CBD5E1" stroke-width="2" x1="100" x2="100" y1="5" y2="125"></line>
+                    <line stroke="#CBD5E1" stroke-width="2" x1="5" x2="195" y1="65" y2="65"></line>
+                    
+                    <g class="floorplan-quadrant hover:opacity-80 cursor-pointer" data-tomb="sultan_begum">
+                      <rect fill="#FEF3C7" height="35" rx="2" stroke="#D97706" stroke-width="1.2" width="35" x="25" y="20"></rect>
+                      <circle cx="42.5" cy="37.5" fill="#FDE68A" r="7"></circle>
+                      <text fill="#92400E" font-family="Noto Serif" font-size="6" font-weight="bold" text-anchor="middle" x="42.5" y="39">सुल्तान बेगम</text>
+                    </g>
+                    <g class="floorplan-quadrant hover:opacity-80 cursor-pointer" data-tomb="khusro_tomb">
+                      <rect fill="#D6E3FF" height="35" rx="2" stroke="#0B66C3" stroke-width="1.2" width="35" x="140" y="20"></rect>
+                      <circle cx="157.5" cy="37.5" fill="#BFDBFE" r="7"></circle>
+                      <text fill="#004E9A" font-family="Noto Serif" font-size="6" font-weight="bold" text-anchor="middle" x="157.5" y="39">ख़ुसरो मक़बरा</text>
+                    </g>
+                    <g class="floorplan-quadrant hover:opacity-80 cursor-pointer" data-tomb="nisar_begum">
+                      <rect fill="#D1FAE5" height="35" rx="2" stroke="#007650" stroke-width="1.2" width="35" x="25" y="75"></rect>
+                      <circle cx="42.5" cy="92.5" fill="#A7F3D0" r="7"></circle>
+                      <text fill="#005B3D" font-family="Noto Serif" font-size="6" font-weight="bold" text-anchor="middle" x="42.5" y="94">निसार बेगम</text>
+                    </g>
+                    <g class="floorplan-quadrant hover:opacity-80 cursor-pointer" data-tomb="tambolan">
+                      <rect fill="#E2E8F0" height="35" rx="2" stroke="#64748B" stroke-width="1.2" width="35" x="140" y="75"></rect>
+                      <circle cx="157.5" cy="92.5" fill="#CBD5E1" r="7"></circle>
+                      <text fill="#334155" font-family="Noto Serif" font-size="6" font-weight="bold" text-anchor="middle" x="157.5" y="94">तांबूल बेगम</text>
+                    </g>
+                    <g transform="translate(180, 20)">
+                      <line marker-end="url(#arrow)" stroke="#DC2626" stroke-width="1.5" x1="0" x2="0" y1="12" y2="0"></line>
+                      <text fill="#DC2626" font-size="7" font-weight="bold" text-anchor="middle" x="0" y="-2">N</text>
+                    </g>
+                  </svg>
+                </div>
+
+                <!-- Infobox Key-Values -->
+                <div class="divide-y divide-border-subtle text-[11px] font-sans">
+                  <div class="px-2.5 py-1.5 flex justify-between">
+                    <span class="text-text-muted">देश</span>
+                    <span class="text-text-primary font-medium">भारत 🇮🇳</span>
+                  </div>
+                  <div class="px-2.5 py-1.5 flex justify-between">
+                    <span class="text-text-muted">स्थान</span>
+                    <span class="text-wiki-blue font-medium" id="infobox-location">लूकरगंज, प्रयागराज</span>
+                  </div>
+                  <div class="px-2.5 py-1.5 flex justify-between">
+                    <span class="text-text-muted">वास्तुकार</span>
+                    <span class="text-text-primary" id="infobox-architect">आक़ा रज़ा (1622)</span>
+                  </div>
+                  <div class="px-2.5 py-1.5 flex justify-between">
+                    <span class="text-text-muted">निर्देशांक</span>
+                    <span class="font-mono text-emerald-700" id="infobox-coordinates">25°26′41″N 81°49′17″E</span>
+                  </div>
+                  <div class="px-2.5 py-1.5 flex justify-between">
+                    <span class="text-text-muted">QID</span>
+                    <span class="font-mono text-wiki-blue font-semibold" id="infobox-qid">Q6403185</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Main Reading Content (Generous font size and line height) -->
+              <div class="space-y-4 text-[17px] leading-[30px]" id="wiki-rendered-text">
+                <p id="wiki-p1">
+                  <strong class="font-bold text-text-primary">खुसरो बाग़</strong> भारत के उत्तर प्रदेश राज्य के <a class="text-wiki-blue hover:underline font-semibold" href="#">प्रयागराज</a> (इलाहाबाद) शहर के लूकरगंज उपनगर में स्थित एक ऐतिहासिक मुग़ल उद्यान एवं समाधि स्थल है। यह प्रयागराज जंक्शन रेलवे स्टेशन के समीप स्थित है और लगभग 40 एकड़ के विस्तृत भू-भाग में फैला हुआ है।<sup class="text-wiki-blue font-mono text-[12px] font-bold cursor-pointer hover:underline">[1]</sup>
+                </p>
+
+                <!-- Audio Pronunciation Widget -->
+                <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-50 border border-border-subtle text-[13px] font-sans my-1 shadow-2xs" id="audio-widget-container">
+                  <button class="w-6 h-6 rounded-full bg-wiki-blue text-white flex items-center justify-center hover:bg-wiki-blue-hover cursor-pointer transition-transform active:scale-95" id="audio-play-btn" title="उच्चारण सुनें">
+                    <span class="material-symbols-outlined text-[15px]" id="audio-play-icon">play_arrow</span>
+                  </button>
+                  <span class="text-text-muted">उच्चारण:</span>
+                  <span class="font-semibold text-text-primary" id="audio-pronounce-text">"खुसरो बाग़"</span>
+                  <span class="font-mono text-[11px] text-wiki-blue">(Hi-KhusroBagh.ogg)</span>
+                </div>
+
+                <p id="wiki-p2">
+                  यह बाग़ मुग़ल बादशाह <a class="text-wiki-blue hover:underline" href="#">जहाँगीर</a> के सबसे बड़े विद्रोही पुत्र, शहज़ादा ख़ुसरो मिर्ज़ा के विश्राम स्थल के रूप में विख्यात है। इस चारबाग़ उद्यान का निर्माण 1622 ईस्वी में पूरा हुआ था, जिसकी वास्तुकला की देखरेख प्रसिद्ध दरबारी कलाकार <a class="text-wiki-blue hover:underline font-semibold" href="#">आक़ा रज़ा</a> (Aqa Reza) द्वारा की गई थी।<sup class="text-wiki-blue font-mono text-[12px] font-bold cursor-pointer hover:underline">[2]</sup>
+                </p>
+
+                <h2 class="font-headline font-bold text-[19px] text-text-primary pt-3 border-b border-border-subtle pb-1">वास्तुकला एवं मक़बरों की संरचना</h2>
+                
+                <p id="wiki-p3">
+                  बाग़ के केंद्र में स्थित सुल्तान ख़ुसरो का मक़बरा तीन तलों में निर्मित है। इसके गुंबद के भीतरी हिस्सों में सुंदर फ़ारसी सुलेख और बेल-बूटों की चित्रकारी आज भी संरक्षित है। यहाँ उनकी माता शाह बेगम और बहन निसार बेगम के भी मक़बरे उपस्थित हैं, जिन्हें <a class="text-wiki-blue hover:underline" href="#">भारतीय पुरातत्व सर्वेक्षण</a> (ASI) द्वारा राष्ट्रीय महत्व के स्मारक के रूप में संरक्षित किया गया है।<sup class="text-wiki-blue font-mono text-[12px] font-bold cursor-pointer hover:underline">[3]</sup>
+                </p>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </main>
+
+    <!-- ============================================================ -->
+    <!-- 4. COLLAPSIBLE RIGHT "PRAMAAN INSPECTOR" (SLIDE-OVER / DOCKABLE) -->
+    <!-- ============================================================ -->
+    <aside class="w-[370px] bg-white border-l border-border-subtle flex flex-col justify-between shrink-0 transition-all duration-300 shadow-lg z-30 select-none" id="pramaan-inspector-drawer">
+      
+      <!-- Drawer Header with Tabs -->
+      <div class="px-3 py-2.5 bg-slate-50 border-b border-border-subtle flex items-center justify-between">
+        <div class="flex items-center gap-1.5 font-headline font-bold text-[13px] text-text-primary">
+          <span class="material-symbols-outlined text-[17px] text-wiki-blue">verified_user</span>
+          <span>Pramaan Inspector</span>
+        </div>
+        <button id="inspector-close-btn" class="p-1 rounded hover:bg-slate-200 text-text-secondary transition-colors" title="Close Inspector">
+          <span class="material-symbols-outlined text-[18px]">close</span>
+        </button>
+      </div>
+
+      <!-- Inspector Sub-Tabs -->
+      <div class="px-3 pt-2 bg-slate-50 border-b border-border-subtle flex gap-1">
+        <button class="inspector-tab px-2.5 py-1.5 rounded-t-md text-[11px] font-medium transition-colors border-b-2 border-wiki-blue text-wiki-blue bg-white cursor-pointer" data-tab="tab-evidence" id="tab-btn-evidence">
+          Evidence &amp; Voice
+        </button>
+        <button class="inspector-tab px-2.5 py-1.5 rounded-t-md text-[11px] font-medium transition-colors text-text-muted hover:text-text-primary cursor-pointer" data-tab="tab-ai-npov" id="tab-btn-ai-npov">
+          NPOV &amp; Bias
+        </button>
+        <button class="inspector-tab px-2.5 py-1.5 rounded-t-md text-[11px] font-medium transition-colors text-text-muted hover:text-text-primary cursor-pointer" data-tab="tab-graph" id="tab-btn-graph">
+          Knowledge Graph
+        </button>
+      </div>
+
+      <!-- Inspector Content Body -->
+      <div class="p-4 overflow-y-auto flex-1 space-y-4 text-[12px]">
+        
+        <!-- ============================================== -->
+        <!-- TAB 1: FIELD EVIDENCE & EXIF -->
+        <!-- ============================================== -->
+        <div class="inspector-pane space-y-3.5" id="pane-evidence">
+          <!-- Card 1: Physical Proof & EXIF Geo-Verification -->
+          <div class="rounded-xl border border-border-subtle p-3.5 space-y-3 bg-slate-50/80 shadow-2xs transition-all duration-300 hover:border-slate-300" id="col-field">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-1.5 truncate">
+                <span class="material-symbols-outlined text-[17px] text-wiki-blue">photo_camera</span>
+                <span class="font-medium text-text-primary truncate text-[12px]" id="photo-filename-label">ASI Monument Brass Plaque.jpg</span>
+              </div>
+              <div class="flex items-center gap-1.5 shrink-0">
+                <button class="p-1 rounded-md hover:bg-slate-200/80 text-wiki-blue transition-colors cursor-pointer" id="upload-photo-btn" title="Upload monument photograph">
+                  <span class="material-symbols-outlined text-[16px]">upload_file</span>
+                </button>
+                <button class="px-2 py-0.5 rounded-full bg-emerald-subtle text-emerald-800 font-mono text-[10px] font-semibold border border-emerald-200 hover:bg-emerald-100 hover:shadow-xs transition-all duration-300 cursor-pointer flex items-center gap-1 active:scale-[0.97]" id="exif-signed-badge" title="Inspect Cryptographic Provenance Receipt & Lightbox">
+                  <span class="material-symbols-outlined text-[12px] text-emerald-accent">verified</span>
+                  <span>✓ EXIF Signed</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Plaque Graphic Simulation (Click to View Provenance Lightbox) -->
+            <div class="relative w-full rounded-xl bg-gradient-to-br from-[#785b30] via-[#523d1d] to-[#2e210d] p-3.5 text-amber-100 flex flex-col justify-between overflow-hidden cursor-pointer group shadow-sm border border-amber-500/20 transition-all duration-300 hover:shadow-md hover:border-amber-400/40" id="plaque-card-trigger" title="Click to view Cryptographic Provenance Lightbox">
+              <div class="flex items-start justify-between">
+                <div class="flex items-center gap-1.5">
+                  <span class="material-symbols-outlined text-[15px] text-amber-200">account_balance</span>
+                  <div class="text-[8px] uppercase tracking-wider text-amber-200/90 font-mono">ARCHAEOLOGICAL SURVEY OF INDIA</div>
+                </div>
+                <div class="flex items-center gap-1">
+                  <span class="font-mono text-[8px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-200 border border-amber-400/20" id="plaque-asi-code">#N-UP-A14</span>
+                  <span class="text-[9px] font-mono text-emerald-300 opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 px-1 rounded flex items-center gap-0.5">
+                    <span class="material-symbols-outlined text-[11px]">zoom_in</span> Lightbox
+                  </span>
+                </div>
+              </div>
+
+              <div class="my-2.5 text-center">
+                <div class="font-headline font-bold text-[13.5px] text-amber-100 tracking-wide" id="plaque-monument-title">खुसरो बाग़ (1622 ईस्वी)</div>
+                <p class="font-encyclopedic text-[11px] leading-relaxed text-amber-200/90 line-clamp-2 mt-0.5" id="plaque-inscription-snippet">
+                  जहाँगीर के ज्येष्ठ पुत्र सुल्तान ख़ुसरो का समाधि स्थल। इस उद्यान का निर्माण दरबारी चित्रकार आक़ा रज़ा द्वारा कराया गया।
+                </p>
+              </div>
+
+              <div class="flex justify-between font-mono text-[8.5px] text-amber-300/80 pt-1.5 border-t border-amber-500/20">
+                <span id="plaque-gps-text">25.4448° N, 81.8213° E</span>
+                <span id="plaque-camera-text">Canon EOS R5 • 11:24 IST</span>
+              </div>
+            </div>
+
+            <!-- Collapsible Secondary Vision OCR & Metadata Logs -->
+            <details class="group rounded-xl bg-white border border-border-subtle p-2.5 transition-all duration-300 ease-in-out" open>
+              <summary class="flex justify-between items-center cursor-pointer select-none font-mono text-[11px] text-text-secondary hover:text-text-primary list-none">
+                <div class="flex items-center gap-1.5">
+                  <span class="material-symbols-outlined text-[14px] text-wiki-blue">document_scanner</span>
+                  <span class="font-semibold uppercase tracking-wider text-[10px]">Vision OCR Metadata</span>
+                </div>
+                <div class="flex items-center gap-1">
+                  <button class="text-emerald-700 font-bold hover:underline flex items-center gap-0.5 cursor-pointer bg-emerald-subtle px-1.5 py-0.5 rounded border border-emerald-200 text-[10px]" id="ocr-gazette-match" title="View Verification Receipt">
+                    <span>99.4% Match</span>
+                    <span class="material-symbols-outlined text-[11px]">open_in_new</span>
+                  </button>
+                  <span class="material-symbols-outlined text-[15px] text-slate-400 group-open:rotate-180 transition-transform duration-200">expand_more</span>
+                </div>
+              </summary>
+
+              <div class="pt-2 font-mono text-[11px] space-y-1 text-text-secondary border-t border-slate-100 mt-2" id="ocr-extraction-box">
+                <div>EPOCH: <span class="text-text-primary font-medium" id="ocr-construct-epoch">1622 CE (Jahangir)</span></div>
+                <div>ARCHITECT: <span class="text-text-primary font-medium" id="ocr-lead-architect">Aqa Reza Herati (आक़ा रज़ा)</span></div>
+                <div>STATUS: <span class="text-emerald-700 font-medium" id="ocr-asi-status">National Protected</span></div>
+                <div>COORD: <span class="text-text-primary" id="ocr-p625-coord">25.4448, 81.8213</span></div>
+                <div>SHA: <span class="text-slate-400 text-[10px] select-all cursor-pointer hover:text-wiki-blue" id="ocr-sha256" title="Click to inspect SHA signature">9f833777...dcf682f3</span></div>
+              </div>
+            </details>
+
+            <!-- Confidence Bar -->
+            <div class="space-y-1 font-mono text-[11px]">
+              <div class="flex justify-between text-text-muted">
+                <span>Gazette Grounding Match</span>
+                <span class="text-emerald-700 font-bold" id="gazette-match-percent">99.4%</span>
+              </div>
+              <div class="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                <div class="bg-emerald-accent h-full transition-all duration-500 rounded-full" id="gazette-progress-bar" style="width: 99.4%"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 2: Voice-First Field Narration (Collapsible Accordion) -->
+          <details class="group rounded-xl border border-border-subtle p-3.5 space-y-3 bg-slate-50/80 shadow-2xs transition-all duration-300 hover:border-slate-300" open>
+            <summary class="flex items-center justify-between cursor-pointer select-none list-none">
+              <div class="flex items-center gap-1.5 font-medium text-text-primary text-[12px]">
+                <span class="material-symbols-outlined text-[17px] text-saffron-accent">mic</span>
+                <span>Voice Narration</span>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <span class="px-2 py-0.5 rounded-full bg-saffron-subtle text-amber-800 font-mono text-[10px] font-semibold flex items-center gap-1 border border-amber-200" id="rec-status-pill">
+                  <span class="w-1.5 h-1.5 rounded-full bg-saffron-accent" id="rec-dot"></span>
+                  <span id="rec-timer-badge">READY (hi-IN)</span>
+                </span>
+                <span class="material-symbols-outlined text-[15px] text-slate-400 group-open:rotate-180 transition-transform duration-200">expand_more</span>
+              </div>
+            </summary>
+
+            <!-- Waveform & Mic Button -->
+            <div class="p-2.5 rounded-xl bg-white border border-border-subtle flex items-center gap-3 shadow-2xs">
+              <button class="w-9 h-9 rounded-full bg-saffron-accent text-white flex items-center justify-center shrink-0 shadow-xs hover:bg-amber-600 transition-all cursor-pointer active:scale-95" id="mic-toggle-btn" title="Start/Stop Voice Recording">
+                <span class="material-symbols-outlined text-[18px]" id="mic-icon">graphic_eq</span>
+              </button>
+              
+              <div class="flex-1 min-w-0">
+                <div class="flex justify-between text-[11px] font-mono text-text-muted mb-1">
+                  <span class="text-amber-800 font-semibold" id="audio-stream-label">Hinglish Stream</span>
+                  <span>48.0 kHz</span>
+                </div>
+                <!-- Wave bars -->
+                <div class="flex items-end gap-1 h-5 px-1 bg-slate-50 rounded overflow-hidden border border-border-subtle" id="spectrogram-bars">
+                  <div class="wave-bar w-1 bg-saffron-accent rounded-full h-2 transition-all duration-75"></div>
+                  <div class="wave-bar w-1 bg-saffron-accent rounded-full h-4 transition-all duration-75"></div>
+                  <div class="wave-bar w-1 bg-saffron-accent rounded-full h-3 transition-all duration-75"></div>
+                  <div class="wave-bar w-1 bg-saffron-accent rounded-full h-5 transition-all duration-75"></div>
+                  <div class="wave-bar w-1 bg-saffron-accent rounded-full h-2 transition-all duration-75"></div>
+                  <div class="wave-bar w-1 bg-saffron-accent rounded-full h-4 transition-all duration-75"></div>
+                  <div class="wave-bar w-1 bg-saffron-accent rounded-full h-5 transition-all duration-75"></div>
+                  <div class="wave-bar w-1 bg-saffron-accent rounded-full h-3 transition-all duration-75"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Live Transcript Box -->
+            <div class="p-2.5 rounded-xl bg-white border border-border-subtle text-[12px] leading-relaxed text-text-primary shadow-2xs" id="live-transcript">
+              <span class="bg-emerald-50 text-emerald-800 px-1 py-0.5 rounded font-medium">खुसरो बाग़</span>
+              <span>लूकरगंज में स्थित है और इसके बड़े दरवाजे पर फ़ारसी शिलालेख आक़ा रज़ा का उल्लेख करता है...</span>
+            </div>
+
+            <div class="flex justify-between text-[10px] font-mono text-text-muted pt-0.5">
+              <span>Token Confidence</span>
+              <span class="text-emerald-700 font-bold" id="asr-token-confidence">98.1% Token Avg</span>
+            </div>
+            
+            <input type="checkbox" id="commons-audio-checkbox" checked class="hidden"/>
+            <span class="hidden" id="audio-filename-tag"></span>
+          </details>
+
+          <!-- Card 3: Grounded Reference Vault (Collapsible Accordion) -->
+          <details class="group rounded-xl border border-border-subtle p-3.5 space-y-2.5 bg-slate-50/80 shadow-2xs transition-all duration-300 hover:border-slate-300" open id="reference-vault">
+            <summary class="flex justify-between items-center cursor-pointer select-none list-none text-[11px] font-mono uppercase text-text-muted font-semibold">
+              <div class="flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-[15px] text-wiki-blue">inventory_2</span>
+                <span>Reference Vault</span>
+              </div>
+              <div class="flex items-center gap-1">
+                <span id="vault-sources-count" class="text-text-secondary lowercase">3 sources</span>
+                <span class="material-symbols-outlined text-[15px] text-slate-400 group-open:rotate-180 transition-transform duration-200">expand_more</span>
+              </div>
+            </summary>
+            <div class="space-y-1.5 text-[11px] font-sans pt-1">
+              <div class="p-2 rounded-lg bg-white border border-border-subtle hover:border-wiki-blue/40 transition-colors cursor-pointer">
+                <div class="flex justify-between font-mono font-medium text-wiki-blue">
+                  <span>[Ref 1] ASI Plaque OCR</span>
+                  <span class="text-emerald-700">✓ Grounded</span>
+                </div>
+                <div class="text-text-muted text-[10px] mt-0.5">Field EXIF 2024-11-14 11:24 IST, camera signature matched.</div>
+              </div>
+              <div class="p-2 rounded-lg bg-white border border-border-subtle hover:border-wiki-blue/40 transition-colors cursor-pointer">
+                <div class="flex justify-between font-mono font-medium text-wiki-blue">
+                  <span>[Ref 2] UP District Gazetteer</span>
+                  <span class="text-emerald-700">✓ Grounded</span>
+                </div>
+                <div class="text-text-muted text-[10px] mt-0.5">Allahabad (1968), Page 114: Tomb architectural schematics.</div>
+              </div>
+            </div>
+          </details>
+        </div>
+
+        <!-- ============================================== -->
+        <!-- TAB 2: NPOV & AI BIAS FIREWALL -->
+        <!-- ============================================== -->
+        <div class="inspector-pane hidden space-y-4" id="pane-ai-npov">
+          <!-- Epistemic Meter Radial Gauge -->
+          <div class="rounded-lg border border-border-subtle p-3.5 bg-slate-50/50 space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="font-medium text-[13px] text-text-primary">Pramaan Epistemic Meter</span>
+              <span class="font-mono text-[10px] text-emerald-800 bg-emerald-subtle px-1.5 py-0.5 rounded font-bold" id="epistemic-status-badge">PASSED</span>
+            </div>
+
+            <div class="flex items-center gap-3 bg-white p-3 rounded-lg border border-border-subtle">
+              <div class="relative w-14 h-14 shrink-0 flex items-center justify-center">
+                <svg class="w-14 h-14 transform -rotate-90" viewBox="0 0 36 36">
+                  <path class="text-slate-200" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" stroke-width="3.5"></path>
+                  <path class="text-emerald-accent transition-all duration-700" id="epistemic-score-circle" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" stroke-dasharray="96, 100" stroke-linecap="round" stroke-width="3.5"></path>
+                </svg>
+                <div class="absolute flex flex-col items-center">
+                  <span class="font-headline font-bold text-[14px] text-text-primary leading-none" id="epistemic-score-num">96</span>
+                  <span class="text-[8px] font-mono text-text-muted">/100</span>
+                </div>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="font-semibold text-[13px] text-text-primary" id="epistemic-verdict-title">Pramaan Verified</div>
+                <div class="text-[11px] text-text-muted leading-tight mt-0.5" id="epistemic-verdict-desc">
+                  High multimodal alignment across image EXIF, UP Gazette, and English Wiki.
+                </div>
+              </div>
+            </div>
+
+            <!-- Telemetry Progress Bars -->
+            <div class="space-y-2 font-mono text-[11px]">
+              <div>
+                <div class="flex justify-between mb-0.5 text-text-muted">
+                  <span>Physical Grounding</span>
+                  <span class="text-emerald-700 font-bold" id="telemetry-grounding-num">100%</span>
+                </div>
+                <div class="w-full h-1 bg-slate-200 rounded-full overflow-hidden">
+                  <div class="bg-emerald-accent h-full w-full" id="telemetry-grounding-bar"></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between mb-0.5 text-text-muted">
+                  <span>NPOV Neutral Tone</span>
+                  <span class="text-wiki-blue font-bold" id="telemetry-npov-num">94%</span>
+                </div>
+                <div class="w-full h-1 bg-slate-200 rounded-full overflow-hidden">
+                  <div class="bg-wiki-blue h-full transition-all duration-500" id="npov-progress-bar" style="width: 94%"></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between mb-0.5 text-text-muted">
+                  <span>Zero-Hallucination</span>
+                  <span class="text-emerald-700 font-bold" id="telemetry-hallucination-num">99.8%</span>
+                </div>
+                <div class="w-full h-1 bg-slate-200 rounded-full overflow-hidden">
+                  <div class="bg-emerald-accent h-full" id="telemetry-hallucination-bar" style="width: 99.8%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Subjective Adjective Warning Card -->
+          <div class="rounded-xl bg-saffron-subtle border border-amber-200 p-3.5 space-y-2.5 transition-all duration-300 ease-in-out shadow-2xs" id="bias-alert">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-1.5 text-amber-900 font-mono text-[11px] font-semibold">
+                <span class="material-symbols-outlined text-[15px] text-saffron-accent">warning</span>
+                <span>Subjective Adjective Detected</span>
+              </div>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-100 text-amber-900 border border-amber-200" id="npov-status-pill">
+                NPOV: FLAGGED
+              </span>
+            </div>
+            <p class="text-[11.5px] text-text-secondary leading-snug">
+              Flagged phrase: <span class="bg-white px-1.5 py-0.5 rounded font-medium text-amber-900 border border-amber-200/60" id="flagged-bias-phrase">"अद्वितीय और सबसे सुंदर"</span> violates Wikipedia:NPOV.
+            </p>
+            <div class="flex items-center gap-2 pt-0.5">
+              <button class="flex-1 py-2 px-3 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white text-[12px] font-semibold flex items-center justify-center gap-1.5 transition-all duration-300 ease-in-out cursor-pointer shadow-xs active:scale-[0.98]" id="fix-bias-btn" title="One-click automatic neutrality remediation">
+                <span class="material-symbols-outlined text-[15px]">magic_button</span>
+                <span>✨ Auto-Neutralize</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="p-2.5 rounded bg-emerald-subtle border border-emerald-200 text-[11px] text-emerald-900 space-y-1">
+            <div class="font-mono font-semibold flex items-center gap-1 text-emerald-800">
+              <span class="material-symbols-outlined text-[14px]">location_on</span>
+              <span>P625 Geolocation Precision Match</span>
+            </div>
+            <p class="text-[10px] text-emerald-700 leading-tight" id="geolocation-precision-text">
+              EXIF coordinates match Wikidata claim within 14.8m. Ground truth verified against Indian Survey Datum.
+            </p>
+          </div>
+          
+          <span class="hidden" id="firewall-ping"></span>
+        </div>
+
+        <!-- ============================================== -->
+        <!-- TAB 3: KNOWLEDGE CARTOGRAPHER GRAPH -->
+        <!-- ============================================== -->
+        <div class="inspector-pane hidden space-y-4" id="pane-graph" id="col-knowledge">
+          <div class="rounded-lg border border-border-subtle p-3 bg-slate-900 text-slate-100 space-y-2.5 shadow-xs">
+            <div class="flex items-center justify-between text-[11px] font-mono">
+              <div class="flex items-center gap-1.5 text-slate-200 font-medium">
+                <span class="material-symbols-outlined text-[16px] text-sky-400">hub</span>
+                <span>2D Force-Directed Graph</span>
+              </div>
+              <span class="text-sky-300">Wikidata Triples</span>
+            </div>
+
+            <!-- 2D Force-Directed Graph Canvas Container -->
+            <div class="relative w-full h-48 bg-slate-950/90 rounded border border-slate-800 overflow-hidden flex items-center justify-center" id="knowledge-graph-container">
+              <!-- Dynamically rendered via knowledgeGraph.js -->
+            </div>
+
+            <!-- Auto-Heal Button -->
+            <button class="w-full py-2 px-2.5 rounded bg-wiki-blue text-white hover:bg-wiki-blue-hover text-[11px] font-medium flex items-center justify-center gap-1.5 transition-colors shadow-2xs cursor-pointer" id="heal-graph-btn">
+              <span class="material-symbols-outlined text-[14px]">auto_fix_high</span>
+              <span>⚡ Auto-Heal 4 Broken WikiLinks</span>
+            </button>
+          </div>
+
+          <div class="p-3 rounded bg-slate-50 border border-border-subtle text-[11px] font-mono space-y-1">
+            <div class="text-text-muted font-bold">WIKIDATA TOPOLOGY STATUS</div>
+            <div class="flex justify-between"><span>Root QID:</span><span class="text-wiki-blue font-bold">Q6403185 (Khusro Bagh)</span></div>
+            <div class="flex justify-between"><span>Orphan Links:</span><span class="text-amber-700 font-bold" id="orphan-status-text">Aqa Reza, Nisar Begum</span></div>
+            <div class="flex justify-between"><span>Authority:</span><span class="text-emerald-700 font-bold">ASI Cadastral Alignment</span></div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Drawer Footer -->
+      <div class="p-3 bg-slate-50 border-t border-border-subtle flex items-center justify-between text-[11px] font-mono text-text-muted">
+        <span>Trust: Hardware Backed</span>
+        <span>WP:NPOV Verified</span>
+      </div>
+    </aside>
+
+  </div>
+
+  <!-- ============================================================== -->
+  <!-- 5. SLIM CLEAN FOOTER (38px) -->
+  <!-- ============================================================== -->
+  <footer class="h-[38px] bg-white border-t border-border-subtle px-4 flex items-center justify-between gap-4 select-none text-[11px] font-mono shrink-0">
+    <div class="flex items-center gap-2 truncate">
+      <span class="material-symbols-outlined text-[15px] text-emerald-accent" id="footer-status-icon">check_circle</span>
+      <span class="text-text-muted font-semibold uppercase tracking-wider text-[10px]">Status:</span>
+      <span class="text-text-secondary truncate" id="footer-status-text">
+        Pipeline Ready: 1 Wikitext Article • 1 Geotagged Image • 1 Native Audio (.ogg) • 4 Wikidata Claims
+      </span>
+    </div>
+
+    <div class="flex items-center gap-1.5 shrink-0">
+      <button class="px-2.5 py-1 rounded hover:bg-slate-100 text-text-secondary text-[11px] font-medium flex items-center gap-1 transition-colors cursor-pointer" id="btn-load-preset" title="Switch Monument Preset">
+        <span class="material-symbols-outlined text-[13px] text-saffron-accent">download</span>
+        <span>Load Preset</span>
+      </button>
+      <button class="px-2.5 py-1 rounded hover:bg-slate-100 text-text-secondary text-[11px] font-medium flex items-center gap-1 transition-colors cursor-pointer" id="btn-firewall-test" title="Inject Test Bias">
+        <span class="material-symbols-outlined text-[13px] text-red-500">shield</span>
+        <span>Firewall Test</span>
+      </button>
+      <button class="px-2.5 py-1 rounded bg-wiki-blue text-white text-[11px] font-medium hover:bg-wiki-blue-hover transition-colors shadow-2xs flex items-center gap-1 cursor-pointer" id="bottom-sandbox-push-btn">
+        <span class="material-symbols-outlined text-[13px]">publish</span>
+        <span>Sandbox Push</span>
+      </button>
+    </div>
+  </footer>
+
+  <!-- ============================================================== -->
+  <!-- 6. MODALS (PROVENANCE LIGHTBOX, EXPORT BUNDLE & GEMINI API SETTINGS) -->
+  <!-- ============================================================== -->
+  <!-- Modal: Interactive Provenance Lightbox & Cryptographic Receipt -->
+  <div class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 transition-all duration-300 ease-in-out" id="provenance-modal">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-3xl w-full border border-border-subtle flex flex-col max-h-[90vh] overflow-hidden transform transition-all duration-300">
+      <!-- Header -->
+      <div class="px-5 py-3.5 bg-slate-50 border-b border-border-subtle flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-emerald-accent text-[22px]">verified</span>
+          <div>
+            <h3 class="font-headline font-bold text-[15px] text-text-primary">ASI Archaeological Provenance &amp; Cryptographic Receipt</h3>
+            <p class="text-[11px] text-text-muted font-mono">W3C Verifiable Credential • Grounded against Archaeological Survey of India</p>
+          </div>
+        </div>
+        <button class="w-8 h-8 rounded-full hover:bg-slate-200 text-text-muted hover:text-text-primary flex items-center justify-center cursor-pointer transition-colors" id="close-provenance-modal">
+          <span class="material-symbols-outlined text-[18px]">close</span>
+        </button>
+      </div>
+
+      <!-- Modal Body: 2-Column Split (Image with Bounding Box Overlay + Receipt Details) -->
+      <div class="p-5 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-5 text-[12px]">
+        <!-- Left: High-Res Plaque Simulation with Interactive Bounding Box -->
+        <div class="space-y-2">
+          <span class="font-mono text-[11px] uppercase tracking-wider text-text-muted font-semibold block">Source Capture &amp; Bounding Box</span>
+          <div class="relative w-full rounded-xl bg-gradient-to-br from-[#785b30] via-[#523d1d] to-[#2e210d] p-4 text-amber-100 flex flex-col justify-between overflow-hidden shadow-lg border-2 border-amber-500/30 aspect-[4/3]">
+            <!-- Simulated Vision OCR Bounding Box Crosshairs -->
+            <div class="absolute inset-3 border-2 border-emerald-400/90 rounded border-dashed pointer-events-none flex flex-col justify-between p-2">
+              <div class="flex justify-between items-start">
+                <span class="bg-emerald-600 text-white font-mono text-[9px] px-1.5 py-0.5 rounded shadow">P625: 25.4448, 81.8213 [CONF: 99.4%]</span>
+                <span class="material-symbols-outlined text-emerald-300 text-[18px] animate-pulse">filter_center_focus</span>
+              </div>
+              <div class="bg-black/70 backdrop-blur-2xs p-2 rounded border border-emerald-400/50 text-[10px] text-amber-100 font-mono space-y-0.5">
+                <div class="text-emerald-300 font-bold flex items-center gap-1">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                  <span>OCR BOUNDING BOX (ASI-1622):</span>
+                </div>
+                <div>"खुसरो बाग़... दरबारी चित्रकार आक़ा रज़ा (Aqa Reza)"</div>
+              </div>
+            </div>
+
+            <!-- Plaque Content Underneath -->
+            <div class="flex items-start justify-between z-0 opacity-40">
+              <span class="material-symbols-outlined text-[20px] text-amber-200">account_balance</span>
+              <span class="font-mono text-[9px] px-1 rounded bg-amber-500/20 text-amber-200" id="lightbox-asi-code">#N-UP-A14</span>
+            </div>
+            <div class="text-center z-0 opacity-40">
+              <div class="font-headline font-bold text-[14px]" id="lightbox-monument-title">खुसरो बाग़ (1622 ईस्वी)</div>
+            </div>
+            <div class="flex justify-between font-mono text-[9px] text-amber-300/80 z-0 opacity-40">
+              <span id="lightbox-camera-model">Canon EOS R5</span>
+              <span id="lightbox-gps-coords">25.4448° N, 81.8213° E</span>
+            </div>
+          </div>
+          <p class="text-[11px] text-text-muted font-sans italic">
+            Optical coordinates and epigraph matches Indian Survey Datum within 11.2 meters.
+          </p>
+        </div>
+
+        <!-- Right: Cryptographic Receipt Card -->
+        <div class="space-y-3">
+          <span class="font-mono text-[11px] uppercase tracking-wider text-text-muted font-semibold block">Attestation Credentials</span>
+          
+          <div class="p-3 rounded-xl bg-slate-50 border border-border-subtle font-mono text-[11px] space-y-1.5">
+            <div class="flex justify-between items-center text-emerald-700 font-bold">
+              <span>CRYPTOGRAPHIC PROVENANCE</span>
+              <span class="bg-emerald-subtle text-emerald-800 text-[10px] px-1.5 py-0.5 rounded border border-emerald-200 font-bold">✓ VALIDATED</span>
+            </div>
+            <div class="text-[10px] text-text-secondary break-all bg-white p-2 rounded border border-border-subtle font-mono select-all" id="modal-provenance-sha">
+              9f833777d9e052532b32b91c8683ec5120b1905b37b42136a61f0747dcf682f3
+            </div>
+          </div>
+
+          <div class="space-y-1.5 text-[11px] font-sans">
+            <div class="flex justify-between p-2 rounded bg-slate-50 border border-border-subtle">
+              <span class="text-text-muted">Monument Entity</span>
+              <span class="font-medium text-text-primary" id="modal-prov-monument">खुसरो बाग़ (Khusro Bagh)</span>
+            </div>
+            <div class="flex justify-between p-2 rounded bg-slate-50 border border-border-subtle">
+              <span class="text-text-muted">Coordinates</span>
+              <span class="font-mono text-emerald-700 font-medium" id="modal-prov-coords">25.4448° N, 81.8213° E (Δ 0.0001°)</span>
+            </div>
+            <div class="flex justify-between p-2 rounded bg-slate-50 border border-border-subtle">
+              <span class="text-text-muted">ASI Gazette Category</span>
+              <span class="font-medium text-text-primary" id="modal-prov-category">Monument of National Importance</span>
+            </div>
+            <div class="flex justify-between p-2 rounded bg-slate-50 border border-border-subtle">
+              <span class="text-text-muted">Camera Hardware</span>
+              <span class="font-mono text-text-secondary" id="modal-prov-camera">Canon EOS R5 (Exif 2.32)</span>
+            </div>
+            <div class="flex justify-between p-2 rounded bg-slate-50 border border-border-subtle">
+              <span class="text-text-muted">Field Timestamp</span>
+              <span class="font-mono text-text-secondary" id="modal-prov-time">2024-11-14 11:24:08 IST</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="px-5 py-3 bg-slate-50 border-t border-border-subtle flex items-center justify-between">
+        <button class="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-text-secondary font-medium text-[12px] border border-border-subtle transition-colors cursor-pointer" id="btn-copy-provenance-sha">
+          Copy SHA-256 Hash
+        </button>
+        <button class="px-4 py-1.5 rounded-lg bg-emerald-accent text-white hover:bg-emerald-700 font-medium text-[12px] shadow-xs transition-colors cursor-pointer" id="btn-close-provenance">
+          Done
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Export Package & Sandbox Push -->
+  <div class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/40 backdrop-blur-2xs p-4" id="export-modal">
+    <div class="bg-white rounded-xl shadow-2xl max-w-xl w-full border border-border-subtle flex flex-col max-h-[85vh] overflow-hidden">
+      <div class="px-5 py-3.5 bg-slate-50 border-b border-border-subtle flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-wiki-blue text-[20px]">verified</span>
+          <div>
+            <h3 class="font-headline font-bold text-[15px] text-text-primary">Wikimedia Sandbox Push &amp; Export Bundle</h3>
+            <p class="text-[11px] text-text-muted font-mono">Target: hi.wikipedia.org/wiki/सदस्य:PramaanBot/प्रयोगपृष्ठ</p>
+          </div>
+        </div>
+        <button class="w-7 h-7 rounded-full hover:bg-slate-200 text-text-muted hover:text-text-primary flex items-center justify-center cursor-pointer transition-colors" id="close-export-modal">
+          <span class="material-symbols-outlined text-[18px]">close</span>
+        </button>
+      </div>
+
+      <div class="p-5 space-y-3.5 overflow-y-auto text-[12px]">
+        <div class="p-3 rounded-lg bg-slate-50 border border-border-subtle font-mono text-[11px] space-y-1">
+          <div class="flex justify-between items-center text-wiki-blue font-bold">
+            <span>SHA-256 INTEGRITY SIGNATURE</span>
+            <span class="text-emerald-700">✓ HARDWARE BACKED</span>
+          </div>
+          <div class="text-[10px] text-text-muted break-all" id="modal-sha-signature">
+            9f833777d9e052532b32b91c8683ec5120b1905b37b42136a61f0747dcf682f3
+          </div>
+        </div>
+
+        <div>
+          <span class="text-[11px] font-mono uppercase text-text-muted tracking-wider block mb-1 font-semibold">Bundle Contents</span>
+          <div class="space-y-1 font-sans text-[12px]">
+            <div class="flex items-center justify-between p-2 rounded bg-slate-50 border border-border-subtle">
+              <span>Wikitext Article Body (Hindi Wikipedia Vector-2022)</span>
+              <span class="font-mono text-[11px] text-wiki-blue">1,420 bytes</span>
+            </div>
+            <div class="flex items-center justify-between p-2 rounded bg-slate-50 border border-border-subtle">
+              <span>Wikimedia Commons Native Audio Pronunciation (.ogg)</span>
+              <span class="font-mono text-[11px] text-amber-800">Hi-KhusroBagh.ogg</span>
+            </div>
+            <div class="flex items-center justify-between p-2 rounded bg-slate-50 border border-border-subtle">
+              <span>SVG Floorplan Vector Diagram (ASI Registered)</span>
+              <span class="font-mono text-[11px] text-wiki-blue">SVG v2.1</span>
+            </div>
+            <div class="flex items-center justify-between p-2 rounded bg-slate-50 border border-border-subtle">
+              <span>Wikidata Claims &amp; Entity Triples (P131, P149, P127, P84)</span>
+              <span class="font-mono text-[11px] text-emerald-700">4 Verified Claims</span>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <span class="text-[11px] font-mono uppercase text-text-muted tracking-wider block mb-1 font-semibold">Preview MediaWiki API Payload</span>
+          <pre class="p-3 rounded bg-slate-900 text-slate-200 font-mono text-[11px] overflow-x-auto max-h-36 border border-slate-700" id="modal-json-preview"></pre>
+        </div>
+      </div>
+
+      <div class="px-5 py-3 bg-slate-50 border-t border-border-subtle flex items-center justify-between">
+        <button class="px-3 py-1.5 rounded hover:bg-slate-200 text-text-secondary font-medium text-[12px] transition-colors cursor-pointer" id="btn-copy-payload">
+          Copy JSON
+        </button>
+        <div class="flex items-center gap-2">
+          <button class="px-3 py-1.5 rounded bg-white hover:bg-slate-100 text-text-primary font-medium text-[12px] border border-border-subtle transition-colors cursor-pointer" id="btn-cancel-modal">
+            Cancel
+          </button>
+          <button class="px-4 py-1.5 rounded bg-wiki-blue text-white hover:bg-wiki-blue-hover font-medium text-[12px] shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer" id="btn-confirm-push">
+            <span class="material-symbols-outlined text-[15px]">send</span>
+            <span>Confirm Push</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Gemini API Key Config -->
+  <div class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/40 backdrop-blur-2xs p-4" id="api-modal">
+    <div class="bg-white rounded-xl shadow-2xl max-w-md w-full border border-border-subtle flex flex-col overflow-hidden">
+      <div class="px-4 py-3 bg-slate-50 border-b border-border-subtle flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-wiki-blue text-[19px]">smart_toy</span>
+          <h3 class="font-headline font-bold text-[14px] text-text-primary">Gemini API Settings</h3>
+        </div>
+        <button class="w-7 h-7 rounded-full hover:bg-slate-200 text-text-muted hover:text-text-primary flex items-center justify-center cursor-pointer transition-colors" id="close-api-modal">
+          <span class="material-symbols-outlined text-[17px]">close</span>
+        </button>
+      </div>
+
+      <div class="p-4 space-y-3 text-[12px]">
+        <p class="text-text-secondary leading-relaxed">
+          Operating in <strong>Zero-Latency Studio Simulation Mode</strong> by default. Enter a Google Gemini API Key to enable live multimodal audits with <code class="font-mono text-wiki-blue font-semibold">gemini-3.8-flash</code>.
+        </p>
+
+        <div class="space-y-1">
+          <label class="block font-mono text-[11px] uppercase text-text-muted font-semibold tracking-wider">Google Gemini API Key</label>
+          <input type="password" id="input-gemini-key" placeholder="AIzaSy..." class="w-full px-3 py-1.5 rounded border border-border-subtle font-mono text-[12px] text-text-primary focus:border-wiki-blue focus:ring-1 focus:ring-wiki-blue outline-none transition-all"/>
+        </div>
+
+        <div class="p-2.5 rounded bg-slate-50 border border-border-subtle font-mono text-[11px] space-y-1">
+          <div class="flex justify-between"><span class="text-text-muted">Model:</span><span class="text-wiki-blue font-semibold">gemini-3.8-flash</span></div>
+          <div class="flex justify-between"><span class="text-text-muted">Target:</span><span>hi-IN (Devanagari)</span></div>
+          <div class="flex justify-between"><span class="text-text-muted">Policy:</span><span class="text-emerald-700 font-semibold">Wikipedia:NPOV</span></div>
+        </div>
+      </div>
+
+      <div class="px-4 py-3 bg-slate-50 border-t border-border-subtle flex items-center justify-between">
+        <button class="px-3 py-1.5 rounded text-red-600 hover:bg-red-50 font-medium text-[12px] transition-colors cursor-pointer" id="btn-clear-key">Clear Key</button>
+        <button class="px-4 py-1.5 rounded bg-wiki-blue text-white hover:bg-wiki-blue-hover font-medium text-[12px] shadow-xs transition-colors cursor-pointer" id="btn-save-key">Save Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notifications Container -->
+  <div class="fixed bottom-12 right-5 z-50 flex flex-col gap-2 max-w-sm pointer-events-none" id="toast-container"></div>
+
+  <!-- Universal Application Entrypoint (Works both via localhost and direct file:// in Explorer) -->
+  <script src="js/bundle.js"></script>
+
+</body>
+</html>
